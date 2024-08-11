@@ -1,0 +1,22 @@
+[
+  {
+    "arguments": [
+      "/usr/bin/aarch64-linux-gnu-gcc-10",
+      "-g",
+      "-Wall",
+      "-ffreestanding",
+      "-fno-builtin",
+      "-mlittle-endian",
+      "-march=armv8-a+crc",
+      "-mtune=cortex-a76",
+      "-I.",
+      "kernel.c",
+      "-c",
+      "-o",
+      "kernel.o"
+    ],
+    "directory": "/data/workspace/rock-osdev/part3-helloworld",
+    "file": "/data/workspace/rock-osdev/part3-helloworld/kernel.c",
+    "output": "/data/workspace/rock-osdev/part3-helloworld/kernel.o"
+  }
+]
