@@ -1,0 +1,14 @@
+lib-y += vsprintf.o
+lib-y += string.o
+lib-y += ctype.o
+lib-y += printk.o
+lib-y += errno.o
+lib-y += display_options.o
+lib-y += hang.o
+lib-y += panic.o
+lib-y += hexdump.o
+lib-y += time.o
+lib-y += strto.o
+lib-$(CONFIG_ERRNO_STR) += errno_str.o
+lib-y += malloc.o
+lib-y += rand.o

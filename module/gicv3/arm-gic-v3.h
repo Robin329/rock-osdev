@@ -1,0 +1,1092 @@
+/*
+ * Copyright (C) 2013, 2014 ARM Limited, All Rights Reserved.
+ * Author: Marc Zyngier <marc.zyngier@arm.com>
+ *
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
+#ifndef __LINUX_IRQCHIP_ARM_GIC_V3_H_
+#define __LINUX_IRQCHIP_ARM_GIC_V3_H_
+
+#include <asm/sysreg.h>
+#include <asm/barriers.h>
+
+/*
+ * Distributor registers. We assume we're running non-secure, with ARE
+ * being set. Secure-only and non-ARE registers are not described.
+ */
+#define GICD_CTLR			0x0000
+#define GICD_TYPER			0x0004
+#define GICD_IIDR			0x0008
+#define GICD_STATUSR			0x0010
+#define GICD_SETSPI_NSR			0x0040
+#define GICD_CLRSPI_NSR			0x0048
+#define GICD_SETSPI_SR			0x0050
+#define GICD_CLRSPI_SR			0x0058
+#define GICD_SEIR			0x0068
+#define GICD_IGROUPR			0x0080
+#define GICD_ISENABLER			0x0100
+#define GICD_ICENABLER			0x0180
+#define GICD_ISPENDR			0x0200
+#define GICD_ICPENDR			0x0280
+#define GICD_ISACTIVER			0x0300
+#define GICD_ICACTIVER			0x0380
+#define GICD_IPRIORITYR			0x0400
+#define GICD_ICFGR			0x0C00
+#define GICD_IGRPMODR			0x0D00
+#define GICD_NSACR			0x0E00
+#define GICD_IROUTER			0x6100
+#define GICD_IDREGS			0xFFD0
+#define GICD_PIDR2			0xFFE8
+
+/*
+ * Those registers are actually from GICv2, but the spec demands that they
+ * are implemented as RES0 if ARE is 1 (which we do in KVM's emulated GICv3).
+ */
+#define GICD_ITARGETSR			0x0800
+#define GICD_SGIR			0x0F00
+#define GICD_CPENDSGIR			0x0F10
+#define GICD_SPENDSGIR			0x0F20
+
+#define GICD_CTLR_RWP			(1U << 31)
+#define GICD_CTLR_DS			(1U << 6)
+#define GICD_CTLR_ARE_NS		(1U << 4)
+#define GICD_CTLR_ENABLE_G1A		(1U << 1)
+#define GICD_CTLR_ENABLE_G1		(1U << 0)
+
+#define GICD_IIDR_IMPLEMENTER_SHIFT	0
+#define GICD_IIDR_IMPLEMENTER_MASK	(0xfff << GICD_IIDR_IMPLEMENTER_SHIFT)
+#define GICD_IIDR_REVISION_SHIFT	12
+#define GICD_IIDR_REVISION_MASK		(0xf << GICD_IIDR_REVISION_SHIFT)
+#define GICD_IIDR_VARIANT_SHIFT		16
+#define GICD_IIDR_VARIANT_MASK		(0xf << GICD_IIDR_VARIANT_SHIFT)
+#define GICD_IIDR_PRODUCT_ID_SHIFT	24
+#define GICD_IIDR_PRODUCT_ID_MASK	(0xff << GICD_IIDR_PRODUCT_ID_SHIFT)
+
+
+/*
+ * In systems with a single security state (what we emulate in KVM)
+ * the meaning of the interrupt group enable bits is slightly different
+ */
+#define GICD_CTLR_ENABLE_SS_G1		(1U << 1)
+#define GICD_CTLR_ENABLE_SS_G0		(1U << 0)
+
+#define GICD_TYPER_RSS			(1U << 26)
+#define GICD_TYPER_LPIS			(1U << 17)
+#define GICD_TYPER_MBIS			(1U << 16)
+
+#define GICD_TYPER_ID_BITS(typer)	((((typer) >> 19) & 0x1f) + 1)
+#define GICD_TYPER_NUM_LPIS(typer)	((((typer) >> 11) & 0x1f) + 1)
+#define GICD_TYPER_IRQS(typer)		((((typer) & 0x1f) + 1) * 32)
+
+#define GICD_IROUTER_SPI_MODE_ONE	(0U << 31)
+#define GICD_IROUTER_SPI_MODE_ANY	(1U << 31)
+
+#define GIC_PIDR2_ARCH_MASK		0xf0
+#define GIC_PIDR2_ARCH_GICv3		0x30
+#define GIC_PIDR2_ARCH_GICv4		0x40
+
+#define GIC_V3_DIST_SIZE		0x10000
+
+/*
+ * Re-Distributor registers, offsets from RD_base
+ */
+#define GICR_CTLR			GICD_CTLR
+#define GICR_IIDR			0x0004
+#define GICR_TYPER			0x0008
+#define GICR_STATUSR			GICD_STATUSR
+#define GICR_WAKER			0x0014
+#define GICR_PWRR			0x0024
+#define GICR_SETLPIR			0x0040
+#define GICR_CLRLPIR			0x0048
+#define GICR_SEIR			GICD_SEIR
+#define GICR_PROPBASER			0x0070
+#define GICR_PENDBASER			0x0078
+#define GICR_INVLPIR			0x00A0
+#define GICR_INVALLR			0x00B0
+#define GICR_SYNCR			0x00C0
+#define GICR_MOVLPIR			0x0100
+#define GICR_MOVALLR			0x0110
+#define GICR_IDREGS			GICD_IDREGS
+#define GICR_PIDR2			GICD_PIDR2
+
+#define GICR_CTLR_ENABLE_LPIS		(1UL << 0)
+#define GICR_CTLR_RWP			(1UL << 3)
+
+#define GICR_TYPER_CPU_NUMBER(r)	(((r) >> 8) & 0xffff)
+
+#define GICR_WAKER_ProcessorSleep	(1U << 1)
+#define GICR_WAKER_ChildrenAsleep	(1U << 2)
+
+#define GIC_BASER_CACHE_nCnB		0ULL
+#define GIC_BASER_CACHE_SameAsInner	0ULL
+#define GIC_BASER_CACHE_nC		1ULL
+#define GIC_BASER_CACHE_RaWt		2ULL
+#define GIC_BASER_CACHE_RaWb		3ULL
+#define GIC_BASER_CACHE_WaWt		4ULL
+#define GIC_BASER_CACHE_WaWb		5ULL
+#define GIC_BASER_CACHE_RaWaWt		6ULL
+#define GIC_BASER_CACHE_RaWaWb		7ULL
+#define GIC_BASER_CACHE_MASK		7ULL
+#define GIC_BASER_NonShareable		0ULL
+#define GIC_BASER_InnerShareable	1ULL
+#define GIC_BASER_OuterShareable	2ULL
+#define GIC_BASER_SHAREABILITY_MASK	3ULL
+
+#define GIC_BASER_CACHEABILITY(reg, inner_outer, type)			\
+	(GIC_BASER_CACHE_##type << reg##_##inner_outer##_CACHEABILITY_SHIFT)
+
+#define GIC_BASER_SHAREABILITY(reg, type)				\
+	(GIC_BASER_##type << reg##_SHAREABILITY_SHIFT)
+
+/* encode a size field of width @w containing @n - 1 units */
+#define GIC_ENCODE_SZ(n, w) (((unsigned long)(n) - 1) & GENMASK_ULL(((w) - 1), 0))
+
+#define GICR_PROPBASER_SHAREABILITY_SHIFT		(10)
+#define GICR_PROPBASER_INNER_CACHEABILITY_SHIFT		(7)
+#define GICR_PROPBASER_OUTER_CACHEABILITY_SHIFT		(56)
+#define GICR_PROPBASER_SHAREABILITY_MASK				\
+	GIC_BASER_SHAREABILITY(GICR_PROPBASER, SHAREABILITY_MASK)
+#define GICR_PROPBASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, MASK)
+#define GICR_PROPBASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_PROPBASER, OUTER, MASK)
+#define GICR_PROPBASER_CACHEABILITY_MASK GICR_PROPBASER_INNER_CACHEABILITY_MASK
+
+#define GICR_PROPBASER_InnerShareable					\
+	GIC_BASER_SHAREABILITY(GICR_PROPBASER, InnerShareable)
+
+#define GICR_PROPBASER_nCnB	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, nCnB)
+#define GICR_PROPBASER_nC 	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, nC)
+#define GICR_PROPBASER_RaWt	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, RaWt)
+#define GICR_PROPBASER_RaWb	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, RaWt)
+#define GICR_PROPBASER_WaWt	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, WaWt)
+#define GICR_PROPBASER_WaWb	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, WaWb)
+#define GICR_PROPBASER_RaWaWt	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, RaWaWt)
+#define GICR_PROPBASER_RaWaWb	GIC_BASER_CACHEABILITY(GICR_PROPBASER, INNER, RaWaWb)
+
+#define GICR_PROPBASER_IDBITS_MASK			(0x1f)
+#define GICR_PROPBASER_ADDRESS(x)	((x) & GENMASK_ULL(51, 12))
+#define GICR_PENDBASER_ADDRESS(x)	((x) & GENMASK_ULL(51, 16))
+
+#define GICR_PENDBASER_SHAREABILITY_SHIFT		(10)
+#define GICR_PENDBASER_INNER_CACHEABILITY_SHIFT		(7)
+#define GICR_PENDBASER_OUTER_CACHEABILITY_SHIFT		(56)
+#define GICR_PENDBASER_SHAREABILITY_MASK				\
+	GIC_BASER_SHAREABILITY(GICR_PENDBASER, SHAREABILITY_MASK)
+#define GICR_PENDBASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, MASK)
+#define GICR_PENDBASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_PENDBASER, OUTER, MASK)
+#define GICR_PENDBASER_CACHEABILITY_MASK GICR_PENDBASER_INNER_CACHEABILITY_MASK
+
+#define GICR_PENDBASER_InnerShareable					\
+	GIC_BASER_SHAREABILITY(GICR_PENDBASER, InnerShareable)
+
+#define GICR_PENDBASER_nCnB	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, nCnB)
+#define GICR_PENDBASER_nC 	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, nC)
+#define GICR_PENDBASER_RaWt	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, RaWt)
+#define GICR_PENDBASER_RaWb	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, RaWt)
+#define GICR_PENDBASER_WaWt	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, WaWt)
+#define GICR_PENDBASER_WaWb	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, WaWb)
+#define GICR_PENDBASER_RaWaWt	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, RaWaWt)
+#define GICR_PENDBASER_RaWaWb	GIC_BASER_CACHEABILITY(GICR_PENDBASER, INNER, RaWaWb)
+
+#define GICR_PENDBASER_PTZ				BIT_ULL(62)
+
+/*
+ * Re-Distributor registers, offsets from SGI_base
+ */
+#define GICR_SGI_BASE			(0x10000)
+#define GICR_IGROUPR0			GICD_IGROUPR
+#define GICR_ISENABLER0			GICD_ISENABLER
+#define GICR_ICENABLER0			GICD_ICENABLER
+#define GICR_ISPENDR0			GICD_ISPENDR
+#define GICR_ICPENDR0			GICD_ICPENDR
+#define GICR_ISACTIVER0			GICD_ISACTIVER
+#define GICR_ICACTIVER0			GICD_ICACTIVER
+#define GICR_IPRIORITYR0		GICD_IPRIORITYR
+#define GICR_ICFGR0			GICD_ICFGR
+#define GICR_IGRPMODR0			GICD_IGRPMODR
+#define GICR_NSACR			GICD_NSACR
+
+#define GICR_TYPER_PLPIS		(1U << 0)
+#define GICR_TYPER_VLPIS		(1U << 1)
+#define GICR_TYPER_DirectLPIS		(1U << 3)
+#define GICR_TYPER_LAST			(1U << 4)
+
+#define GIC_V3_REDIST_SIZE		0x20000
+
+#define LPI_PROP_GROUP1			(1 << 1)
+#define LPI_PROP_ENABLED		(1 << 0)
+
+/*
+ * Re-Distributor registers, offsets from VLPI_base
+ */
+#define GICR_VPROPBASER			0x0070
+
+#define GICR_VPROPBASER_IDBITS_MASK	0x1f
+
+#define GICR_VPROPBASER_SHAREABILITY_SHIFT		(10)
+#define GICR_VPROPBASER_INNER_CACHEABILITY_SHIFT	(7)
+#define GICR_VPROPBASER_OUTER_CACHEABILITY_SHIFT	(56)
+
+#define GICR_VPROPBASER_SHAREABILITY_MASK				\
+	GIC_BASER_SHAREABILITY(GICR_VPROPBASER, SHAREABILITY_MASK)
+#define GICR_VPROPBASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, MASK)
+#define GICR_VPROPBASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, OUTER, MASK)
+#define GICR_VPROPBASER_CACHEABILITY_MASK				\
+	GICR_VPROPBASER_INNER_CACHEABILITY_MASK
+
+#define GICR_VPROPBASER_InnerShareable					\
+	GIC_BASER_SHAREABILITY(GICR_VPROPBASER, InnerShareable)
+
+#define GICR_VPROPBASER_nCnB	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, nCnB)
+#define GICR_VPROPBASER_nC 	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, nC)
+#define GICR_VPROPBASER_RaWt	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, RaWt)
+#define GICR_VPROPBASER_RaWb	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, RaWt)
+#define GICR_VPROPBASER_WaWt	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, WaWt)
+#define GICR_VPROPBASER_WaWb	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, WaWb)
+#define GICR_VPROPBASER_RaWaWt	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, RaWaWt)
+#define GICR_VPROPBASER_RaWaWb	GIC_BASER_CACHEABILITY(GICR_VPROPBASER, INNER, RaWaWb)
+
+#define GICR_VPENDBASER			0x0078
+
+#define GICR_VPENDBASER_SHAREABILITY_SHIFT		(10)
+#define GICR_VPENDBASER_INNER_CACHEABILITY_SHIFT	(7)
+#define GICR_VPENDBASER_OUTER_CACHEABILITY_SHIFT	(56)
+#define GICR_VPENDBASER_SHAREABILITY_MASK				\
+	GIC_BASER_SHAREABILITY(GICR_VPENDBASER, SHAREABILITY_MASK)
+#define GICR_VPENDBASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, MASK)
+#define GICR_VPENDBASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, OUTER, MASK)
+#define GICR_VPENDBASER_CACHEABILITY_MASK				\
+	GICR_VPENDBASER_INNER_CACHEABILITY_MASK
+
+#define GICR_VPENDBASER_NonShareable					\
+	GIC_BASER_SHAREABILITY(GICR_VPENDBASER, NonShareable)
+
+#define GICR_VPENDBASER_nCnB	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, nCnB)
+#define GICR_VPENDBASER_nC 	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, nC)
+#define GICR_VPENDBASER_RaWt	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, RaWt)
+#define GICR_VPENDBASER_RaWb	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, RaWt)
+#define GICR_VPENDBASER_WaWt	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, WaWt)
+#define GICR_VPENDBASER_WaWb	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, WaWb)
+#define GICR_VPENDBASER_RaWaWt	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, RaWaWt)
+#define GICR_VPENDBASER_RaWaWb	GIC_BASER_CACHEABILITY(GICR_VPENDBASER, INNER, RaWaWb)
+
+#define GICR_VPENDBASER_Dirty		(1ULL << 60)
+#define GICR_VPENDBASER_PendingLast	(1ULL << 61)
+#define GICR_VPENDBASER_IDAI		(1ULL << 62)
+#define GICR_VPENDBASER_Valid		(1ULL << 63)
+
+/*
+ * ITS registers, offsets from ITS_base
+ */
+#define GITS_CTLR			0x0000
+#define GITS_IIDR			0x0004
+#define GITS_TYPER			0x0008
+#define GITS_CBASER			0x0080
+#define GITS_CWRITER			0x0088
+#define GITS_CREADR			0x0090
+#define GITS_BASER			0x0100
+#define GITS_IDREGS_BASE		0xffd0
+#define GITS_PIDR0			0xffe0
+#define GITS_PIDR1			0xffe4
+#define GITS_PIDR2			GICR_PIDR2
+#define GITS_PIDR4			0xffd0
+#define GITS_CIDR0			0xfff0
+#define GITS_CIDR1			0xfff4
+#define GITS_CIDR2			0xfff8
+#define GITS_CIDR3			0xfffc
+
+#define GITS_TRANSLATER			0x10040
+
+#define GITS_CTLR_ENABLE		(1U << 0)
+#define GITS_CTLR_ImDe			(1U << 1)
+#define	GITS_CTLR_ITS_NUMBER_SHIFT	4
+#define	GITS_CTLR_ITS_NUMBER		(0xFU << GITS_CTLR_ITS_NUMBER_SHIFT)
+#define GITS_CTLR_QUIESCENT		(1U << 31)
+
+#define GITS_TYPER_PLPIS		(1UL << 0)
+#define GITS_TYPER_VLPIS		(1UL << 1)
+#define GITS_TYPER_ITT_ENTRY_SIZE_SHIFT	4
+#define GITS_TYPER_ITT_ENTRY_SIZE(r)	((((r) >> GITS_TYPER_ITT_ENTRY_SIZE_SHIFT) & 0xf) + 1)
+#define GITS_TYPER_IDBITS_SHIFT		8
+#define GITS_TYPER_DEVBITS_SHIFT	13
+#define GITS_TYPER_DEVBITS(r)		((((r) >> GITS_TYPER_DEVBITS_SHIFT) & 0x1f) + 1)
+#define GITS_TYPER_PTA			(1UL << 19)
+#define GITS_TYPER_HCC_SHIFT		24
+#define GITS_TYPER_HCC(r)		(((r) >> GITS_TYPER_HCC_SHIFT) & 0xff)
+#define GITS_TYPER_VMOVP		(1ULL << 37)
+
+#define GITS_IIDR_REV_SHIFT		12
+#define GITS_IIDR_REV_MASK		(0xf << GITS_IIDR_REV_SHIFT)
+#define GITS_IIDR_REV(r)		(((r) >> GITS_IIDR_REV_SHIFT) & 0xf)
+#define GITS_IIDR_PRODUCTID_SHIFT	24
+
+#define GITS_CBASER_VALID			(1ULL << 63)
+#define GITS_CBASER_SHAREABILITY_SHIFT		(10)
+#define GITS_CBASER_INNER_CACHEABILITY_SHIFT	(59)
+#define GITS_CBASER_OUTER_CACHEABILITY_SHIFT	(53)
+#define GITS_CBASER_SHAREABILITY_MASK					\
+	GIC_BASER_SHAREABILITY(GITS_CBASER, SHAREABILITY_MASK)
+#define GITS_CBASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, MASK)
+#define GITS_CBASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GITS_CBASER, OUTER, MASK)
+#define GITS_CBASER_CACHEABILITY_MASK GITS_CBASER_INNER_CACHEABILITY_MASK
+
+#define GITS_CBASER_InnerShareable					\
+	GIC_BASER_SHAREABILITY(GITS_CBASER, InnerShareable)
+
+#define GITS_CBASER_nCnB	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, nCnB)
+#define GITS_CBASER_nC		GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, nC)
+#define GITS_CBASER_RaWt	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, RaWt)
+#define GITS_CBASER_RaWb	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, RaWt)
+#define GITS_CBASER_WaWt	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, WaWt)
+#define GITS_CBASER_WaWb	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, WaWb)
+#define GITS_CBASER_RaWaWt	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, RaWaWt)
+#define GITS_CBASER_RaWaWb	GIC_BASER_CACHEABILITY(GITS_CBASER, INNER, RaWaWb)
+
+#define GITS_CBASER_ADDRESS(cbaser)	((cbaser) & GENMASK_ULL(51, 12))
+
+#define GITS_BASER_NR_REGS		8
+
+#define GITS_BASER_VALID			(1ULL << 63)
+#define GITS_BASER_INDIRECT			(1ULL << 62)
+
+#define GITS_BASER_INNER_CACHEABILITY_SHIFT	(59)
+#define GITS_BASER_OUTER_CACHEABILITY_SHIFT	(53)
+#define GITS_BASER_INNER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GITS_BASER, INNER, MASK)
+#define GITS_BASER_CACHEABILITY_MASK		GITS_BASER_INNER_CACHEABILITY_MASK
+#define GITS_BASER_OUTER_CACHEABILITY_MASK				\
+	GIC_BASER_CACHEABILITY(GITS_BASER, OUTER, MASK)
+#define GITS_BASER_SHAREABILITY_MASK					\
+	GIC_BASER_SHAREABILITY(GITS_BASER, SHAREABILITY_MASK)
+
+#define GITS_BASER_nCnB		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, nCnB)
+#define GITS_BASER_nC		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, nC)
+#define GITS_BASER_RaWt		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, RaWt)
+#define GITS_BASER_RaWb		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, RaWt)
+#define GITS_BASER_WaWt		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, WaWt)
+#define GITS_BASER_WaWb		GIC_BASER_CACHEABILITY(GITS_BASER, INNER, WaWb)
+#define GITS_BASER_RaWaWt	GIC_BASER_CACHEABILITY(GITS_BASER, INNER, RaWaWt)
+#define GITS_BASER_RaWaWb	GIC_BASER_CACHEABILITY(GITS_BASER, INNER, RaWaWb)
+
+#define GITS_BASER_TYPE_SHIFT			(56)
+#define GITS_BASER_TYPE(r)		(((r) >> GITS_BASER_TYPE_SHIFT) & 7)
+#define GITS_BASER_ENTRY_SIZE_SHIFT		(48)
+#define GITS_BASER_ENTRY_SIZE(r)	((((r) >> GITS_BASER_ENTRY_SIZE_SHIFT) & 0x1f) + 1)
+#define GITS_BASER_ENTRY_SIZE_MASK	GENMASK_ULL(52, 48)
+#define GITS_BASER_PHYS_52_to_48(phys)					\
+	(((phys) & GENMASK_ULL(47, 16)) | (((phys) >> 48) & 0xf) << 12)
+#define GITS_BASER_ADDR_48_to_52(baser)					\
+	(((baser) & GENMASK_ULL(47, 16)) | (((baser) >> 12) & 0xf) << 48)
+
+#define GITS_BASER_SHAREABILITY_SHIFT	(10)
+#define GITS_BASER_InnerShareable					\
+	GIC_BASER_SHAREABILITY(GITS_BASER, InnerShareable)
+#define GITS_BASER_PAGE_SIZE_SHIFT	(8)
+#define GITS_BASER_PAGE_SIZE_4K		(0ULL << GITS_BASER_PAGE_SIZE_SHIFT)
+#define GITS_BASER_PAGE_SIZE_16K	(1ULL << GITS_BASER_PAGE_SIZE_SHIFT)
+#define GITS_BASER_PAGE_SIZE_64K	(2ULL << GITS_BASER_PAGE_SIZE_SHIFT)
+#define GITS_BASER_PAGE_SIZE_MASK	(3ULL << GITS_BASER_PAGE_SIZE_SHIFT)
+#define GITS_BASER_PAGES_MAX		256
+#define GITS_BASER_PAGES_SHIFT		(0)
+#define GITS_BASER_NR_PAGES(r)		(((r) & 0xff) + 1)
+
+#define GITS_BASER_TYPE_NONE		0
+#define GITS_BASER_TYPE_DEVICE		1
+#define GITS_BASER_TYPE_VCPU		2
+#define GITS_BASER_TYPE_RESERVED3	3
+#define GITS_BASER_TYPE_COLLECTION	4
+#define GITS_BASER_TYPE_RESERVED5	5
+#define GITS_BASER_TYPE_RESERVED6	6
+#define GITS_BASER_TYPE_RESERVED7	7
+
+#define GITS_LVL1_ENTRY_SIZE           (8UL)
+
+/*
+ * ITS commands
+ */
+#define GITS_CMD_MAPD			0x08
+#define GITS_CMD_MAPC			0x09
+#define GITS_CMD_MAPTI			0x0a
+#define GITS_CMD_MAPI			0x0b
+#define GITS_CMD_MOVI			0x01
+#define GITS_CMD_DISCARD		0x0f
+#define GITS_CMD_INV			0x0c
+#define GITS_CMD_MOVALL			0x0e
+#define GITS_CMD_INVALL			0x0d
+#define GITS_CMD_INT			0x03
+#define GITS_CMD_CLEAR			0x04
+#define GITS_CMD_SYNC			0x05
+
+/*
+ * GICv4 ITS specific commands
+ */
+#define GITS_CMD_GICv4(x)		((x) | 0x20)
+#define GITS_CMD_VINVALL		GITS_CMD_GICv4(GITS_CMD_INVALL)
+#define GITS_CMD_VMAPP			GITS_CMD_GICv4(GITS_CMD_MAPC)
+#define GITS_CMD_VMAPTI			GITS_CMD_GICv4(GITS_CMD_MAPTI)
+#define GITS_CMD_VMOVI			GITS_CMD_GICv4(GITS_CMD_MOVI)
+#define GITS_CMD_VSYNC			GITS_CMD_GICv4(GITS_CMD_SYNC)
+/* VMOVP is the odd one, as it doesn't have a physical counterpart */
+#define GITS_CMD_VMOVP			GITS_CMD_GICv4(2)
+
+/*
+ * ITS error numbers
+ */
+#define E_ITS_MOVI_UNMAPPED_INTERRUPT		0x010107
+#define E_ITS_MOVI_UNMAPPED_COLLECTION		0x010109
+#define E_ITS_INT_UNMAPPED_INTERRUPT		0x010307
+#define E_ITS_CLEAR_UNMAPPED_INTERRUPT		0x010507
+#define E_ITS_MAPD_DEVICE_OOR			0x010801
+#define E_ITS_MAPD_ITTSIZE_OOR			0x010802
+#define E_ITS_MAPC_PROCNUM_OOR			0x010902
+#define E_ITS_MAPC_COLLECTION_OOR		0x010903
+#define E_ITS_MAPTI_UNMAPPED_DEVICE		0x010a04
+#define E_ITS_MAPTI_ID_OOR			0x010a05
+#define E_ITS_MAPTI_PHYSICALID_OOR		0x010a06
+#define E_ITS_INV_UNMAPPED_INTERRUPT		0x010c07
+#define E_ITS_INVALL_UNMAPPED_COLLECTION	0x010d09
+#define E_ITS_MOVALL_PROCNUM_OOR		0x010e01
+#define E_ITS_DISCARD_UNMAPPED_INTERRUPT	0x010f07
+
+/*
+ * CPU interface registers
+ */
+#define ICC_CTLR_EL1_EOImode_SHIFT	(1)
+#define ICC_CTLR_EL1_EOImode_drop_dir	(0U << ICC_CTLR_EL1_EOImode_SHIFT)
+#define ICC_CTLR_EL1_EOImode_drop	(1U << ICC_CTLR_EL1_EOImode_SHIFT)
+#define ICC_CTLR_EL1_EOImode_MASK	(1 << ICC_CTLR_EL1_EOImode_SHIFT)
+#define ICC_CTLR_EL1_CBPR_SHIFT		0
+#define ICC_CTLR_EL1_CBPR_MASK		(1 << ICC_CTLR_EL1_CBPR_SHIFT)
+#define ICC_CTLR_EL1_PRI_BITS_SHIFT	8
+#define ICC_CTLR_EL1_PRI_BITS_MASK	(0x7 << ICC_CTLR_EL1_PRI_BITS_SHIFT)
+#define ICC_CTLR_EL1_ID_BITS_SHIFT	11
+#define ICC_CTLR_EL1_ID_BITS_MASK	(0x7 << ICC_CTLR_EL1_ID_BITS_SHIFT)
+#define ICC_CTLR_EL1_SEIS_SHIFT		14
+#define ICC_CTLR_EL1_SEIS_MASK		(0x1 << ICC_CTLR_EL1_SEIS_SHIFT)
+#define ICC_CTLR_EL1_A3V_SHIFT		15
+#define ICC_CTLR_EL1_A3V_MASK		(0x1 << ICC_CTLR_EL1_A3V_SHIFT)
+#define ICC_CTLR_EL1_RSS		(0x1 << 18)
+#define ICC_PMR_EL1_SHIFT		0
+#define ICC_PMR_EL1_MASK		(0xff << ICC_PMR_EL1_SHIFT)
+#define ICC_BPR0_EL1_SHIFT		0
+#define ICC_BPR0_EL1_MASK		(0x7 << ICC_BPR0_EL1_SHIFT)
+#define ICC_BPR1_EL1_SHIFT		0
+#define ICC_BPR1_EL1_MASK		(0x7 << ICC_BPR1_EL1_SHIFT)
+#define ICC_IGRPEN0_EL1_SHIFT		0
+#define ICC_IGRPEN0_EL1_MASK		(1 << ICC_IGRPEN0_EL1_SHIFT)
+#define ICC_IGRPEN1_EL1_SHIFT		0
+#define ICC_IGRPEN1_EL1_MASK		(1 << ICC_IGRPEN1_EL1_SHIFT)
+#define ICC_SRE_EL1_DIB			(1U << 2)
+#define ICC_SRE_EL1_DFB			(1U << 1)
+#define ICC_SRE_EL1_SRE			(1U << 0)
+
+/*
+ * Hypervisor interface registers (SRE only)
+ */
+#define ICH_LR_VIRTUAL_ID_MASK		((1ULL << 32) - 1)
+
+#define ICH_LR_EOI			(1ULL << 41)
+#define ICH_LR_GROUP			(1ULL << 60)
+#define ICH_LR_HW			(1ULL << 61)
+#define ICH_LR_STATE			(3ULL << 62)
+#define ICH_LR_PENDING_BIT		(1ULL << 62)
+#define ICH_LR_ACTIVE_BIT		(1ULL << 63)
+#define ICH_LR_PHYS_ID_SHIFT		32
+#define ICH_LR_PHYS_ID_MASK		(0x3ffULL << ICH_LR_PHYS_ID_SHIFT)
+#define ICH_LR_PRIORITY_SHIFT		48
+#define ICH_LR_PRIORITY_MASK		(0xffULL << ICH_LR_PRIORITY_SHIFT)
+
+#undef GICH_LR_VIRTUALID
+#undef GICH_LR_PHYSID_CPUID_SHIFT
+#undef GICH_LR_PHYSID_CPUID
+
+/* These are for GICv2 emulation only */
+#define GICH_LR_VIRTUALID		(0x3ffUL << 0)
+#define GICH_LR_PHYSID_CPUID_SHIFT	(10)
+#define GICH_LR_PHYSID_CPUID		(7UL << GICH_LR_PHYSID_CPUID_SHIFT)
+
+#define ICH_MISR_EOI			(1 << 0)
+#define ICH_MISR_U			(1 << 1)
+
+#define ICH_HCR_EN			(1 << 0)
+#define ICH_HCR_UIE			(1 << 1)
+#define ICH_HCR_NPIE			(1 << 3)
+#define ICH_HCR_TC			(1 << 10)
+#define ICH_HCR_TALL0			(1 << 11)
+#define ICH_HCR_TALL1			(1 << 12)
+#define ICH_HCR_EOIcount_SHIFT		27
+#define ICH_HCR_EOIcount_MASK		(0x1f << ICH_HCR_EOIcount_SHIFT)
+
+#define ICH_VMCR_ACK_CTL_SHIFT		2
+#define ICH_VMCR_ACK_CTL_MASK		(1 << ICH_VMCR_ACK_CTL_SHIFT)
+#define ICH_VMCR_FIQ_EN_SHIFT		3
+#define ICH_VMCR_FIQ_EN_MASK		(1 << ICH_VMCR_FIQ_EN_SHIFT)
+#define ICH_VMCR_CBPR_SHIFT		4
+#define ICH_VMCR_CBPR_MASK		(1 << ICH_VMCR_CBPR_SHIFT)
+#define ICH_VMCR_EOIM_SHIFT		9
+#define ICH_VMCR_EOIM_MASK		(1 << ICH_VMCR_EOIM_SHIFT)
+#define ICH_VMCR_BPR1_SHIFT		18
+#define ICH_VMCR_BPR1_MASK		(7 << ICH_VMCR_BPR1_SHIFT)
+#define ICH_VMCR_BPR0_SHIFT		21
+#define ICH_VMCR_BPR0_MASK		(7 << ICH_VMCR_BPR0_SHIFT)
+#define ICH_VMCR_PMR_SHIFT		24
+#define ICH_VMCR_PMR_MASK		(0xffUL << ICH_VMCR_PMR_SHIFT)
+#define ICH_VMCR_ENG0_SHIFT		0
+#define ICH_VMCR_ENG0_MASK		(1 << ICH_VMCR_ENG0_SHIFT)
+#define ICH_VMCR_ENG1_SHIFT		1
+#define ICH_VMCR_ENG1_MASK		(1 << ICH_VMCR_ENG1_SHIFT)
+
+#define ICH_VTR_PRI_BITS_SHIFT		29
+#define ICH_VTR_PRI_BITS_MASK		(7 << ICH_VTR_PRI_BITS_SHIFT)
+#define ICH_VTR_ID_BITS_SHIFT		23
+#define ICH_VTR_ID_BITS_MASK		(7 << ICH_VTR_ID_BITS_SHIFT)
+#define ICH_VTR_SEIS_SHIFT		22
+#define ICH_VTR_SEIS_MASK		(1 << ICH_VTR_SEIS_SHIFT)
+#define ICH_VTR_A3V_SHIFT		21
+#define ICH_VTR_A3V_MASK		(1 << ICH_VTR_A3V_SHIFT)
+
+#define ICC_IAR1_EL1_SPURIOUS		0x3ff
+
+#define ICC_SRE_EL2_SRE			(1 << 0)
+#define ICC_SRE_EL2_ENABLE		(1 << 3)
+
+#define ICC_SRE_EL3_SRE			(1 << 0)
+#define ICC_SRE_EL3_ENABLE		(1 << 3)
+
+
+#define ICC_SGI1R_TARGET_LIST_SHIFT	0
+#define ICC_SGI1R_TARGET_LIST_MASK	(0xffff << ICC_SGI1R_TARGET_LIST_SHIFT)
+#define ICC_SGI1R_AFFINITY_1_SHIFT	16
+#define ICC_SGI1R_AFFINITY_1_MASK	(0xff << ICC_SGI1R_AFFINITY_1_SHIFT)
+#define ICC_SGI1R_SGI_ID_SHIFT		24
+#define ICC_SGI1R_SGI_ID_MASK		(0xfULL << ICC_SGI1R_SGI_ID_SHIFT)
+#define ICC_SGI1R_AFFINITY_2_SHIFT	32
+#define ICC_SGI1R_AFFINITY_2_MASK	(0xffULL << ICC_SGI1R_AFFINITY_2_SHIFT)
+#define ICC_SGI1R_IRQ_ROUTING_MODE_BIT	40
+#define ICC_SGI1R_RS_SHIFT		44
+#define ICC_SGI1R_RS_MASK		(0xfULL << ICC_SGI1R_RS_SHIFT)
+#define ICC_SGI1R_AFFINITY_3_SHIFT	48
+#define ICC_SGI1R_AFFINITY_3_MASK	(0xffULL << ICC_SGI1R_AFFINITY_3_SHIFT)
+
+#define GICC_IAR_INT_MASK 0xffffff
+#define GICD_ICACTIVERn		0x0380
+enum {
+	IRQ_PPI_GIC_MAIN_INT = 25,
+	/* hypervisor timer interrupt */
+	IRQ_PPI_HYP_INT =26,
+	/* virtual timer interrupt */
+	IRQ_PPI_VTI = 27,
+	IRQ_PPI_EL2_VIRT_INT = 28,
+	IRQ_PPI_SEC_INT = 29,
+	IRQ_PPI_NS_INT = 30,
+	IRQ_PPI_RESER = 31,
+	IRQ_PPI_BUTT = 32,
+};
+
+#define read_gicreg(r)			read_sysreg_s(SYS_ ## r)
+#define write_gicreg(v, r)		write_sysreg_s(v, SYS_ ## r)
+
+/*
+ * Low-level accessors
+ *
+ * These system registers are 32 bits, but we make sure that the compiler
+ * sets the GP register's most significant bits to 0 with an explicit cast.
+ */
+
+static inline void gic_write_eoir(u32 irq)
+{
+	write_sysreg_s(irq, SYS_ICC_EOIR1_EL1);
+	isb();
+}
+
+static inline void gic_write_dir(u32 irq)
+{
+	write_sysreg_s(irq, SYS_ICC_DIR_EL1);
+	isb();
+}
+
+static inline u64 gic_read_iar_common(void)
+{
+	u64 irqstat;
+
+	irqstat = read_sysreg_s(SYS_ICC_IAR1_EL1);
+	dsb();
+
+	return irqstat;
+}
+
+/*
+ * Cavium ThunderX erratum 23154
+ *
+ * The gicv3 of ThunderX requires a modified version for reading the
+ * IAR status to ensure data synchronization (access to icc_iar1_el1
+ * is not sync'ed before and after).
+ */
+static inline u64 gic_read_iar_cavium_thunderx(void)
+{
+	u64 irqstat;
+
+	nops(8);
+	irqstat = read_sysreg_s(SYS_ICC_IAR1_EL1);
+	nops(4);
+	mb();
+
+	return irqstat;
+}
+
+static inline void gic_write_ctlr(u32 val)
+{
+	write_sysreg_s(val, SYS_ICC_CTLR_EL1);
+	isb();
+}
+
+static inline u32 gic_read_ctlr(void)
+{
+	return read_sysreg_s(SYS_ICC_CTLR_EL1);
+}
+
+static inline void gic_write_grpen1(u32 val)
+{
+	write_sysreg_s(val, SYS_ICC_IGRPEN1_EL1);
+	isb();
+}
+
+static inline void gic_write_sgi1r(u64 val)
+{
+	write_sysreg_s(val, SYS_ICC_SGI1R_EL1);
+}
+
+static inline u32 gic_read_sre(void)
+{
+	return read_sysreg_s(SYS_ICC_SRE_EL1);
+}
+
+static inline void gic_write_sre(u32 val)
+{
+	write_sysreg_s(val, SYS_ICC_SRE_EL1);
+	isb();
+}
+
+static inline void gic_write_bpr1(u32 val)
+{
+	write_sysreg_s(val, SYS_ICC_BPR1_EL1);
+}
+
+#define gic_read_typer(c)		readq_relaxed(c)
+#define gic_write_irouter(v, c)		writeq_relaxed(v, c)
+#define gic_read_lpir(c)		readq_relaxed(c)
+#define gic_write_lpir(v, c)		writeq_relaxed(v, c)
+
+#ifndef __ASSEMBLY__
+
+/*
+ * We need a value to serve as a irq-type for LPIs. Choose one that will
+ * hopefully pique the interest of the reviewer.
+ */
+#define GIC_IRQ_TYPE_LPI		0xa110c8ed
+
+struct irq_gic_v3 {
+	bool	has_rss;
+	void	*dist_base;
+	void	*rdist_base;
+	bool	has_vlpis;
+	int		gic_irqs;
+	u32		typer;
+	bool	has_direct_lpi;
+};
+
+static inline bool gic_enable_sre(void)
+{
+	u32 val;
+
+	val = gic_read_sre();
+	if (val & ICC_SRE_EL1_SRE)
+		return true;
+
+	val |= ICC_SRE_EL1_SRE;
+	gic_write_sre(val);
+	val = gic_read_sre();
+
+	return !!(val & ICC_SRE_EL1_SRE);
+}
+
+typedef enum {
+    gicigroupr_G0S = 0,
+    gicigroupr_G1NS = (1 << 0),
+    gicigroupr_G1S = (1 << 1)
+} GICIGROUPRBits;
+
+/* FUSA */
+/* IFP is cluster InterFace protection reference to DSU-AE TRM PartD B2.6 */
+enum {
+	IFP_ACE_MASTER0 = (1 << 0),
+	IFP_ACE_MASTER1 = (1 << 1),
+	IFP_CHI_MASTER0 = (1 << 2),
+	IFP_CHI_MASTER1 = (1 << 3),
+	IFP_ACP = (1 << 4),
+	IFP_APB = (1 << 5),
+	IFP_GIC = (1 << 6),
+	IFP_PERIPH_PORT = (1 << 7),
+	/* clock power management */
+	IFP_CPM = (1 << 8),
+	IFP_MISC = (1 << 9),
+};
+
+enum {
+	IFP_ACE_MASTER0_BIT = (0),
+	IFP_ACE_MASTER1_BIT,
+	IFP_CHI_MASTER0_BIT,
+	IFP_CHI_MASTER1_BIT,
+	IFP_ACP_BIT,
+	IFP_APB_BIT,
+	IFP_GIC_BIT,
+	IFP_PERIPH_PORT_BIT,
+	/* clock power management */
+	IFP_CPM_BIT,
+	IFP_MISC_BIT,
+	IFP_BUFF,
+};
+
+enum {
+	IFP_CMPENR_ACE_MASTER0_BIT = 16,
+	IFP_CMPENR_ACE_MASTER1_BIT,
+	IFP_CMPENR_CHI_MASTER0_BIT,
+	IFP_CMPENR_CHI_MASTER1_BIT,
+	IFP_CMPENR_ACP_BIT,
+	IFP_CMPENR_APB_BIT,
+	IFP_CMPENR_GIC_BIT,
+	IFP_CMPENR_PERIPH_PORT_BIT,
+	/* clock power management */
+	IFP_CMPENR_CPM_BIT,
+	IFP_CMPENR_MISC_BIT,
+	IFP_CMPENR_BUFF,
+};
+
+enum {
+	CL_DCLS_ACE_MASTER0_BIT = (0),
+	CL_DCLS_ACE_MASTER1_BIT,
+	CL_DCLS_CHI_MASTER0_BIT,
+	CL_DCLS_CHI_MASTER1_BIT,
+	CL_DCLS_MISC,
+	CL_DCLS_PUBLINK,
+	CL_DCLS_ACP,
+	CL_DCLS_PERIPH_PORT,
+	CL_DCLS_TAG_RAM,
+	CL_DCLS_SF_RAM,
+	CL_DCLS_DATA_RAM = 10,
+	CL_DCLS_VICTIM_RAM,
+	CL_DCLS_LTDB_RAM,
+	CL_DCLS_SLICE,
+	CL_DCLS_CPM_SCLK,
+	CL_DCLS_CPM_PERIPHCLK,
+	CL_DCLS_EVENT,
+	CL_DCLS_ATB,
+	CL_DCLS_GIC,
+	CL_DCLS_DBG,
+	CL_DCLS_CBC0 = 20,
+	CL_DCLS_CBC1,
+	CL_DCLS_CBC2,
+	CL_DCLS_CBC3,
+	CL_DCLS_BUFF,
+};
+
+enum {
+	CORE_DCLS_CHI = 0,
+	CORE_DCLS_GIC,
+	CORE_DCLS_ATB,
+	CORE_DCLS_APB,
+	CORE_DCLS_TIME_STAMP,
+	CORE_DCLS_EVENT,
+	CORE_DCLS_SRI,
+	CORE_DCLS_MISC,
+	CORE_DCLS_CMPENCP1P = 8,
+	CORE_DCLS_CMPENCP0R = 16,
+	CORE_DCLS_CMPENCP1R = 24,
+	CORE_DCLS_BUFF = 32,
+};
+#define CSR_CPU_CLUSTER_IFP_CMPEN_REG 0x100UL
+#define CSR_CPU_CLUSTER_IFP_FORCE_REG 0x104UL
+#define CSR_CPU_CLUSTER_IFP_FAULT_REG 0x108UL
+
+#define CSR_CPU_CORE_DCLS_CMPEN_REG 0x110UL
+#define CSR_CPU_CORE_DCLS_FORCE_REG 0x114UL
+#define CSR_CPU_CORE_DCLS_FAULT_REG 0x118UL
+
+#define CSR_CPU_CLUSTER_DCLS_CMPENP_REG 0x120
+#define CSR_CPU_CLUSTER_DCLS_FORCEP_REG 0x124
+#define CSR_CPU_CLUSTER_DCLS_FAULTP_REG 0x128
+
+#define CSR_CPU_CLUSTER_DCLS_CMPENR_REG 0x130
+#define CSR_CPU_CLUSTER_DCLS_FORCER_REG 0x134
+#define CSR_CPU_CLUSTER_DCLS_FAULTR_REG 0x138
+
+#define CSR_CPU_MP_BUS_ERR_INJECT 0x300
+/* read only, defined parity interrupt status */
+#define CSR_CPU_MP_BUS_ERR_INTR 0x304
+/* write only, clean the bus error interrupt */
+#define CSR_CPU_MP_BUS_ERR_CLEAN 0x308
+/* interrput mask */
+#define CSR_CPU_MP_BUS_ERR_MASK 0x30c
+#define CPU_MP_BUS_ERR_INJECT_MAX 10
+enum {
+	BUS_ERR_rreadychkmp_intr = 0,
+	bus_err_arctlchk2mp_intr,
+	bus_err_arctlchk1mp_intr,
+	bus_err_arctlchk0mp_intr,
+	bus_err_aridchkmp_intr,
+	BUS_ERR_arvalidchkmp_intr = 5,
+	bus_err_breadychkmp_intr,
+	bus_err_wlastchkmp_intr,
+	bus_err_wstrbchkmp_intr,
+	bus_err_wvalidchkmp_intr,	
+	BUS_ERR_awctlchk2mp_intr = 10,
+	bus_err_awctlchk1mp_intr,
+	bus_err_awctlchk0mp_intr,
+	bus_err_awidchkmp_intr,
+	bus_err_awvalidchkmp_intr,	
+	BUS_ERR_awakeupchkmp_intr = 15,
+	bus_err_buff,
+};
+
+#define CSR_CPU_MP_COMMON_ERR_INJECT 0x310
+/* read only */
+#define CSR_CPU_MP_COMMON_ERR_INTR 0x314
+#define CSR_CPU_MP_COMMON_ERR_MASK 0x318
+#define CSR_CPU_MP_COMMON_ERR_CLEAN 0x31c
+#define CPU_MP_COMMON_ERR_INJECT_MAX 9
+enum {
+	COMMON_ERR_PMUSNAPSHOTACKCHK_INTR = 0,
+	COMMON_ERR_NPMBIRQCHK_INTR,
+	COMMON_ERR_NCLUSTERPMUIRQCHK_INTR,
+	COMMON_ERR_NPMUIRQCHK_INTR,
+	COMMON_ERR_COREINSTRCHK_INTR,
+	COMMON_ERR_DBGRSTREQCHK_INTR =5,
+	COMMON_ERR_NVCPUMNTIRQCHK_INTR,
+	COMMON_ERR_NCOMMIRQCHK_INTR,
+	COMMON_ERR_NERRIRQCHK_INTR,
+	COMMON_ERR_NFAULTIRQCHK_INTR,
+	COMMON_ERR_NCNTHPIRQCHK_INTR = 10,
+	COMMON_ERR_NCNTHVIRQCHK_INTR,
+	COMMON_ERR_NCNTVIRQCHK_INTR,
+	COMMON_ERR_NCNTPSIRQCHK_INTR,
+	COMMON_ERR_NCNTPNSIRQCHK_INTR,
+	COMMON_ERR_CSR_PADDR_APB_INTR = 15,
+	COMMON_ERR_CSR_PWDATA_APB_INTR,
+	COMMON_ERR_BUFF,
+};
+#define CSR_CPU_MP_PARITY_CFG 0x320
+enum {
+	PARITY_EN = (1 << 0),
+	PARITY_CSR_PADDR_APB_PARITY_CHK_EN = (1 << 1),
+	PARITY_CSR_PWDATA_APB_PARITY_CHK_EN = (1 << 2),
+	PARITY_CORE_RAS_LATCH_EN = (1 << 3),
+};
+
+enum {
+	DB_CTRL_CSR_PWDATA_APB_INTR = (1 << 0),
+	DB_CTRL_CSR_PADDR_APB_INTR = (1 << 1),
+	DB_CTRL_CSR_PRDATA_APB_ERR_INJECT = (1 << 2),
+	DB_CTRL_CSR_PWDATA_APB_INTR_CLR = (1 << 3),
+	DB_CTRL_CSR_PWDATA_APB_PARITY_CHK_EN = (1 << 4),
+	DB_CTRL_CSR_PADDR_APB_INTR_CLR = (1 << 5),
+	DB_CTRL_CSR_PADDR_APB_PARITY_CHK_EN = (1 << 6),	
+	DB_CTRL_MP2_PARITY_EN = (1 << 7),
+	DB_CTRL_GIC_PARITY_EN = (1 << 8),	
+};
+
+#define DB_CPU_DSU_M0_INJECT 0x29C
+#define DB_CPU_CPU_DSU_M0_INJECT_MAX 18
+#define DB_CPU_DSU_M0_CLEAN 0x2A4
+#define DB_CPU_DSU_M0_MASK 0x2AC
+#define DB_CPU_DSU_M0_INTR 0x2B4
+
+#define DB_CPU_DSU_MP_INJECT 0x2A0
+#define DB_CPU_CPU_DSU_MP_INJECT_MAX 10
+#define DB_CPU_DSU_MP_CLEAN 0x2A8
+#define DB_CPU_DSU_MP_MASK 0x2B0
+#define DB_CPU_DSU_MP_INTR 0x2B8
+
+#define DB_CSR_PARITY_CTRL 0x3F8
+
+#define MP4_FUSA_CLUSTER0_IRQ 32
+#define MP4_FUSA_CLUSTER1_IRQ 33
+#define IRQ_WDT_SOC 16
+#define IRQ_DW_TIMER_SOC 17
+
+#define IRQ_WDT0_DB 16
+#define IRQ_WDT1_DB 18
+#define IRQ_DW_TIMER0_DB 17
+#define IRQ_DW_TIMER1_DB 19
+#define IRQ_FUSA_DB 32
+
+/* gic FMU register */
+enum {
+	BLK_GICD = 0,
+	BLK_SPI,
+	BLK_WAKE_REQ,
+	BLK_RES,
+	BLK_ITS0 = 4,
+	BLK_ITS1,
+	BLK_PPI0 = 12,
+	BLK_BUFF = 44,
+};
+
+#define GICD_MBIST_RES_ERR              23
+#define PPI_MBIST_RES_ERR               10
+#define ITS_MBIST_RES_ERR               13
+
+/* According to SDM dsu_ae_trm_xx.pdf  table 5-2 */
+enum {
+	GICD_SMID0_RES = 0,
+	GICD_SMID1_DUAL_LOCKSTEP_ERR,
+	GICD_SMID2_AXI4_SLAVE_INTF_ERR,
+	GICD_SMID3_PPI_AXI4_STREAM_INTF_ERR,
+	GICD_SMID4_ITS_AXI4_STREAM_INTF_ERR,
+	GICD_SMID5_SPI_COLLATOR_AXI4_STREAM_INTF_ERR,
+	GICD_SMID6_AXI4_MASTER_INTF_ERR,
+	GICD_SMID7_SPI_RAM_DED_ERR,
+	GICD_SMID8_SGI_RAM_DED_ERR,
+	GICD_SMID9_RES,
+	GICD_SMID10_LPI_RAM_DED_ERR,
+	GICD_SMID11_REMOTE_GICD_AXI_INTF_ERR,
+	GICD_SMID12_QCHANNEL_INTF_ERR,
+	GICD_SMID13_PCHANNEL_INTF_ERR,
+	GICD_SMID14_SPI_RAM_ADDR_DECODE_ERR,
+	GICD_SMID15_SGI_RAM_ADDR_DECODE_ERR,
+	GICD_SMID16_RES,
+	GICD_SMID17_LPI_RAM_ADDR_DECODE_ERR,
+	GICD_SMID18_FMU_DUAL_LOCKSTEP_ERR,
+	GICD_SMID19_FMU_PING_ACK_ERR,
+	GICD_SMID20_FMU_APB_PARITY_ERR,
+	GICD_SMID21_WAKE_AXI4_INTF_ERR,
+	GICD_SMID22_PAGEOFFSET_OR_CHIPID_ERR,
+	/* this bit is disable by default */
+	GICD_SMID23_MBIST_REQ_ERR,
+	GICD_SMID24_SPI_RAM_SEC_ERR,
+	GICD_SMID25_SGI_RAM_SEC_ERR,
+	GICD_SMID26_RES,
+	GICD_SMID27_LPI_RAM_SEC_ERR,
+	GICD_SMID28_USER_CUSTOM_SM0_ERR,
+	GICD_SMID29_USER_CUSTOM_SM1_ERR,
+	GICD_SMID30_ITS_MONOLITHIC_SWITCH_ERR,
+	GICD_SMID31_ITS_QCHANNEL_INTF_ERR,
+	GICD_SMID32_MONOLITHIC_INTF_ERR,
+	/* this bit is disable by default */	
+	GICD_SMID33_FMU_CLKGATE_OVERRIDE,
+	GICD_SMID_BUFF,
+};
+
+enum {
+	SPI_SMID0_RES = 0,
+	SPI_SMID1_COLLATOR_DUAL_LOCKSTEP_ERR,
+	SPI_SMID2_COLLATOR_GICD_AXI4_INTF_ERR,
+	SPI_SMID3_COLLATOR_QCHANNEL_INTF_ERR,
+	SPI_SMID4_COLLATOR_QCHANNEL_CLOCK_ERR,
+	SPI_SMID5_INTER_PARITY_ERR,
+	SPI_SMID_BUFF,
+};
+
+enum {
+	WAKE_REQ_SMID0_RES = 0,
+	WAKE_REQ_SMID1_DUAL_LOCKSTEP_ERR,
+	WAKE_REQ_SMID2_GICD_AXI4_INTF_ERR,
+	WAKE_REQ_SMID_BUFF,
+};
+
+enum {
+	ITS_SMID0_RES = 0,
+	ITS_SMID1_DUAL_LOCKSTEP_ERR,
+	ITS_SMID3_AXI4_SLAVE_INTF_ERR = 3,
+	ITS_SMID8_BYPASS_ACE_SWITCH_ERR = 8,
+	ITS_SMID12_GICD_MONOLITHIC_INTF_ERR = 12,
+	ITS_SMID13_MBIST_REQ_ERR,
+	ITS_SMID14_FMU_CLKGATE_OVERRIDE,
+	ITS_SMID_BUFF,
+};
+
+enum {
+	PPI_SMID0_RES = 0,
+	PPI_SMID1_DUAL_LOCKSTEP_ERR,
+	PPI_SMID11_INTER_PARITY_PROTECTION_ERR = 11,
+	PPI_SMID12_FMU_CLKGATE_OVERRIDE,
+	PPI_SMID_BUFF,
+};
+
+#define FMU_BASE_ADDR                   0x33008000
+#define FMU_ERR_FR(x)                   (0x000 + (x * 64))
+#define FMU_ERR_CTLR(x)                 (0x008 + (x * 64))
+#define FMU_ERR_STATUS(x)               (0x010 + (x * 64))
+#define FMU_ERRGSR                      (0xE00)
+#define FMU_KEY                         (0xEA0)
+#define FMU_PINGCTLR                    (0xEA4)
+#define FMU_PINGNOW                     (0xEA8)
+#define FMU_SMEN                        (0xEB0)
+#define FMU_SMINJERR                    (0xEB4)
+#define FMU_PINGMASK                    (0xEC0)
+#define FMU_STATUS                      (0xF00)
+#define FMU_ERRIDR                      (0xFC8)
+
+enum {
+	FMU_ERR_CTLR_ED_BIT = (1 << 0),
+	FMU_ERR_CTLR_CE_EN_BIT = (1 << 1),	
+	FMU_ERR_CTLR_UI_BIT = (1 << 2),
+	FMU_ERR_CTLR_FI_BIT = (1 << 3),		
+};
+
+typedef union {
+	struct {
+		u64 serr:8;
+		u64 ierr:8;
+		u64 res0:4;
+		u64 uet:2;
+		u64 res1:2;
+		u64 ce:2;
+		u64 res2:1;
+		u64 of:1;
+		u64 res3:1;
+		u64 ue:1;
+		u64 v:1;
+		u64 res4:1;
+		u64 blkid:8;
+		u64 res5:24;
+	} bit;
+	u64 data;
+} UN_REG_FMU_ERR_STATUS;
+
+#define FMU_SMEN_BLK_OFF 8
+#define FMU_SMEN_SMID_OFF 24
+#define FMU_SMEN_ENABLE 1
+
+#define WAIT_TIMES_COUNT (20)
+
+enum {
+	CE_ILLEGAL_MODE = 0,
+	CE_SPLIT_MODE = 1,
+	CE_HYBRID_MODE = 2,
+	CE_LOCK_MODE = 3,
+};
+
+#define GICR_OFFSET (2 * (0x10000))
+
+#endif /* !__ASSEMBLY__ */
+#endif /* !__LINUX_IRQCHIP_ARM_GIC_V3_H_ */

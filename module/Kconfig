@@ -1,0 +1,20 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Module driver"
+	config HELLO_WORLD
+		bool "hello world"
+
+	config UART_TEST
+		bool "Open UART test"
+	if UART_TEST
+	source "module/uart/Kconfig"
+	endif
+
+	config GICV3_TEST
+	bool "Open Module GICV3 test"
+	default y
+	if GICV3_TEST
+	source "module/gicv3/Kconfig"
+	endif
+
+endmenu

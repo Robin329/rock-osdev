@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "GIC V3 controler options"
+
+config DEBUG_GICV3
+    bool "Debug gic v3 controler driver"
+    default n
+
+config GICV3_ITS
+	bool "gic v3 its test"
+	default y
+
+endmenu

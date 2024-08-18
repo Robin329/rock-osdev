@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-2.0
+
+config SYS_TEXT_BASE
+	hex "Text Base"
+	default 0x02000000
+	help
+	  The address in memory that vmimage will be running from, initially.
+
+config RELOC_SYS_TEXT_BASE
+	default 0x80000000
+	hex "Reloc sys text base"
+
+config RELOC_SYS_BLOCK_SIZE
+	default 0x80000000
+	hex "Reloc sys block size"

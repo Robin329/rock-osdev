@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "UART options"
+
+config DEBUG_UART
+    bool "Debug uart module"
+    default n
+
+config UART_MAX_NUM
+    int
+    default 4
+
+config PRINT_UART_BAUD
+	int "print uart rate option"
+	default 115200
+
+config UART_PORT
+	int "UART [0-3] is output as a serial port"
+	default 0
+
+endmenu

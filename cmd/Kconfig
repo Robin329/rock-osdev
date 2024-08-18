@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: GPL-2.0
+
+menu "Command line interface"
+
+if CMDLINE
+
+config DEBUG_CMD
+    bool "Debug command"
+    default n
+endif
+
+config CMD_UART
+    bool "uart"
+    default y
+    select UART_TEST
+    help
+        Initialize uart module,	set baud rate, send and
+        receive data.
+        
+config CMD_GICV3
+    bool "gic v3"
+    depends on GICV3_TEST
+    help
+        gic v3 support
+        
+endmenu
