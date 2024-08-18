@@ -11,7 +11,7 @@
 
 This is a rockchip-based, not a completely bare drive. It is based on the uboot environment, which omits some unnecessary hardware initialization actions, such as DDR, CRM and other hardware resets. This OS can completely design your own OS in the bare drive way. Have fun;)
 
-# Hardware Environment
+## Hardware Environment
 
 ```sh
 Board: rock5a rk3588s
@@ -89,4 +89,5 @@ irq_gicv3: Support LPIs,TODO!
 
 [rock]#
 ```
+
 Have fun;)
