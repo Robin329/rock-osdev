@@ -1,7 +1,7 @@
 /*
  *
  * Automatically generated file; DO NOT EDIT.
- * MYAPP Configuration
+ * ROCKOS Configuration
  *
  */
 #define CONFIG_ENABLE_MUST_CHECK 1
