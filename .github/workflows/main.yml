@@ -18,7 +18,7 @@ jobs:
       - name: install deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y python3 libx11-xcb-dev libx11-dev libgbm-dev libevdev-dev libfmt-dev gcc-aarch64-linux-gnu
+          sudo apt-get install -y python3 libx11-xcb-dev libx11-dev libgbm-dev libevdev-dev libfmt-dev bear gcc-aarch64-linux-gnu
           pip install pyelftools
           chmod a+x ./make.sh
       - name: configure
