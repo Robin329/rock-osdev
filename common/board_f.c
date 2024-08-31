@@ -157,8 +157,7 @@ static int reserve_malloc(void)
 		size = rounddown(size, 4096);
 	} else
 		size = rounddown(CONFIG_MALLOC_F_LEN, 4096);
-	printf("%s:%d size:%#x start_addr_sp:%#lx\n", __FUNCTION__, __LINE__,
-	       size, gd->start_addr_sp);
+
 	gd->start_addr_sp -= size;
 	gd->malloc_base = gd->start_addr_sp;
 	gd->malloc_limit = size;

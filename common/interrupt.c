@@ -105,10 +105,22 @@ int disable_interrupts(void)
     return 0;
 }
 
+// extern void switch_to_el3_g(void);
 extern void switch_to_el2_g(void);
 extern void switch_to_el1_g(void);
 extern void switch_to_el0_g(void);
 
+static int swtich_to_el3_test(cmd_tbl_t *cmdtp, int flag, int argc,
+				char * const argv[])
+{
+	unsigned int el_stat;
+	dcache_disable();
+	// switch_to_el3_g();
+	el_stat = current_el();
+	printf("Now In EL%d\n\r", el_stat);
+
+	return CMD_RET_SUCCESS;
+}
 static int swtich_to_el2_test(cmd_tbl_t *cmdtp, int flag, int argc,
 				char * const argv[])
 {
@@ -142,11 +154,21 @@ static int swtich_to_el0_test(cmd_tbl_t *cmdtp, int flag, int argc,
 	printf("Now In EL%d\n\r", el_stat);
 	return CMD_RET_SUCCESS;
 }
+static int get_current_el(cmd_tbl_t *cmdtp, int flag, int argc,
+				char * const argv[])
+{
+	unsigned int el_stat = 0;
+	el_stat = current_el();
+	printf("Now In EL%d\n\r", el_stat);
+	return CMD_RET_SUCCESS;
+}
 
 static cmd_tbl_t cmd_switch_sub[] = {
-    ROCK_CMD_MKENT(el2, 1, 1, swtich_to_el2_test, "", ""),
-    ROCK_CMD_MKENT(el1, 3, 1, swtich_to_el1_test, "", ""),
-    ROCK_CMD_MKENT(el0, 3, 1, swtich_to_el0_test, "", ""),
+	ROCK_CMD_MKENT(el3, 1, 1, swtich_to_el3_test, "", ""),
+	ROCK_CMD_MKENT(el2, 1, 1, swtich_to_el2_test, "", ""),
+	ROCK_CMD_MKENT(el1, 3, 1, swtich_to_el1_test, "", ""),
+	ROCK_CMD_MKENT(el0, 3, 1, swtich_to_el0_test, "", ""),
+	ROCK_CMD_MKENT(get, 3, 1, get_current_el, "", ""),
 };
 
 static int do_switch_el(cmd_tbl_t *cmdtp, int flag, int argc, char *const argv[])
@@ -171,4 +193,5 @@ ROCK_CMD(switch_el, CONFIG_SYS_MAXARGS, 0, do_switch_el,
 	   "armv8 switch el test",
 	   "switch_el el2\n\r"
        "switch_el el1\n\r"
+       "switch_el get\n\r"
        "switch_el el0");

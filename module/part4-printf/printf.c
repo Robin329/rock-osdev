@@ -1280,7 +1280,7 @@ int printf(const char *fmt, ...) {
 
 int vprintf(const char *fmt, va_list args) {
   int i;
-  char printbuffer[1024];
+  char printbuffer[4096];
 
   /*
    * For this to work, printbuffer must be larger than

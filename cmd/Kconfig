@@ -16,11 +16,22 @@ config CMD_UART
     help
         Initialize uart module,	set baud rate, send and
         receive data.
-        
+
 config CMD_GICV3
     bool "gic v3"
     depends on GICV3_TEST
     help
         gic v3 support
-        
+
+config CMD_MEMORY
+	bool "md, mw, cp, cmp, base"
+	default y
+	help
+	  Memory commands.
+	    md - memory display
+	    mw - memory write (fill)
+	    cp - memory copy
+	    cmp - memory compare
+	    base - print or set address offset
+
 endmenu

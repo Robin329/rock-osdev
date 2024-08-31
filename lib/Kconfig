@@ -12,6 +12,6 @@ config ERRNO_STR
 
 config SYS_PBSIZE
 	int "Print message string buffer size"
-	default 1024
+	default 4096
 
 endmenu

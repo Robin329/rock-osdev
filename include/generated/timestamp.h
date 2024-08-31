@@ -1,5 +1,5 @@
-#define ROCK_DATE "Aug 18 2024"
-#define ROCK_TIME "12:45:40"
+#define ROCK_DATE "Aug 31 2024"
+#define ROCK_TIME "12:15:26"
 #define ROCK_TZ "+0000"
-#define ROCK_DMI_DATE "08/18/2024"
-#define ROCK_BUILD_DATE 0x20240818
+#define ROCK_DMI_DATE "08/31/2024"
+#define ROCK_BUILD_DATE 0x20240831

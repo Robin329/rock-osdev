@@ -222,4 +222,18 @@ bool str2long(const char *p, ulong *num);
  * @hz: Value to convert
  */
 char *strmhz(char *buf, unsigned long hz);
+
+/**
+ * hex_strtoul - convert a string in hex to an unsigned long
+ *
+ * @cp: The string to be converted
+ * @endp: Updated to point to the first character not converted
+ * Return: value decoded from string (0 if invalid)
+ *
+ * Converts a hex string to an unsigned long. If there are invalid characters at
+ * the end these are ignored. In the worst case, if all characters are invalid,
+ * 0 is returned
+ */
+unsigned long hextoul(const char *cp, char **endp);
+
 #endif

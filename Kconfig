@@ -31,14 +31,3 @@ source "module/Kconfig"
 source "cmd/Kconfig"
 
 source "lib/Kconfig.debug"
-
-config FOO
-	bool "Foo"
-	help
-	  foo.
-
-config BAR
-	bool "Bar"
-	depends on FOO
-	help
-	  bar.

@@ -56,6 +56,8 @@ static int gicv3_register_dump_test(void)
 	int i;
 	void *dist_base = gic_data.dist_base;
 	void *rd_sgi_base = gic_data.rdist_base + GICR_SGI_BASE;
+	u32 val;
+	char *str;
 
 	printf("== Dump GIC CPU registers. ==\n");
 	PRINT_SYS_REG(SYS_ICC_CTLR_EL1);
@@ -74,69 +76,119 @@ static int gicv3_register_dump_test(void)
 	printf("== Dump GIC Distributor registers. ==\n");
 	printf("GICD_CTLR  :0x%0x\n", readl(dist_base + GICD_CTLR));
 	printf("GICD_TYPER :0x%0x\n", readl(dist_base + GICD_TYPER));
-	printf("GICD_IIDR  :0x%0x\n", readl(dist_base + GICD_IIDR));
+	val = readl(dist_base + GICD_IIDR);
+	printf("GICD_IIDR  :0x%0x\n", val);
+	if ((val >> 24) & 0x2) {
+		printf("    [31:24]: GIC-600\n");
+	}
+	switch ((val & GENMASK(19, 16)) >> 16) {
+	case 0x0:
+		str = "r0";
+		break;
+	case 0x1:
+		str = "r1";
+		break;
+		default:break;
+		}
+		printf("    [19:16] Variant: %s\n", str);
+		switch ((val & GENMASK(15, 12)) >> 12) {
+		case 0x0:
+			str = "p0";
+			break;
+		case 0x3:
+			str = "p1";
+			break;
+		case 0x4:
+			str = "p2";
+			break;
+		case 0x5:
+			str = "p3";
+			break;
+		case 0x6:
+			str = "p4";
+			break;
+		case 0x7:
+			str = "p6";
+			break;
+		default:
+			break;
+		}
+		printf("    [15:12] revision:%s\n", str);
+		if ((val & GENMASK(11, 0)) == 0x43B)
+			printf("    [15:12] Implementer: %s\n", "ARM");
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_IGROUPRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_IGROUPR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_IGROUPRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_IGROUPR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ISENABLERn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ISENABLER + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ISENABLERn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ISENABLER + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ICENABLERn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ICENABLER + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ICENABLERn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ICENABLER + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ISPENDRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ISPENDR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ISPENDRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ISPENDR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ICPENDRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ICPENDR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ICPENDRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ICPENDR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ISACTIVERn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ISACTIVER + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ISACTIVERn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ISACTIVER + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ICACTIVERn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ICACTIVER + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ICACTIVERn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ICACTIVER + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_IPRIORITYRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_IPRIORITYR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_IPRIORITYRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_IPRIORITYR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ITARGETSRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ITARGETSR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ITARGETSRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ITARGETSR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_ICFGR i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_ICFGR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_ICFGR i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_ICFGR + i));
 
-	printf("GICD_SGIR i: %d val: 0x%x\n", i,
-	       readl(dist_base + GICD_SGIR + i));
+		printf("GICD_SGIR i: %d val: 0x%x\n", i,
+		       readl(dist_base + GICD_SGIR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_CPENDSGIRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_CPENDSGIR + i));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_CPENDSGIRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_CPENDSGIR + i));
 
-	for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
-		printf("GICD_SPENDSGIRn i: %d val: 0x%x\n", i,
-		       readl(dist_base + GICD_SPENDSGIR + i));
-	printf("== Dump cpu0 GIC Rdistributor registers. ==\n");
-	printf("GICR_IGROUPR0 0x%0x\n", readl(rd_sgi_base + GICR_IGROUPR0));
-	printf("GICR_IGRPMODR0 0x%0x\n", readl(rd_sgi_base + GICR_IGRPMODR0));
+		for (i = 0; i < GICV600AE_MAX_INTR / 8; i += 4)
+			printf("GICD_SPENDSGIRn i: %d val: 0x%x\n", i,
+			       readl(dist_base + GICD_SPENDSGIR + i));
+		printf("== Dump cpu0 GIC Rdistributor registers. ==\n");
+		printf("GICR_IGROUPR0 0x%0x\n",
+		       readl(rd_sgi_base + GICR_IGROUPR0));
+		printf("GICR_IGRPMODR0 0x%0x\n",
+		       readl(rd_sgi_base + GICR_IGRPMODR0));
 
-	printf("GICR_ICACTIVER0 0x%0x\n", readl(rd_sgi_base + GICR_ICACTIVER0));
-	printf("GICR_ICENABLER0 0x%0x\n", readl(rd_sgi_base + GICR_ICENABLER0));
-	printf("GICR_ISENABLER0 0x%0x\n", readl(rd_sgi_base + GICR_ISENABLER0));
-	for (i = 0; i < 32; i += 4) {
-		printf("GICR_IPRIORITYR[%d] 0x%0x\n", i, readl(rd_sgi_base + GICR_IPRIORITYR0 + i));
+		printf("GICR_ICACTIVER0 0x%0x\n",
+		       readl(rd_sgi_base + GICR_ICACTIVER0));
+		printf("GICR_ICENABLER0 0x%0x\n",
+		       readl(rd_sgi_base + GICR_ICENABLER0));
+		printf("GICR_ISENABLER0 0x%0x\n",
+		       readl(rd_sgi_base + GICR_ISENABLER0));
+		for (i = 0; i < 32; i += 4) {
+			printf("GICR_IPRIORITYR[%d] 0x%0x\n", i,
+			       readl(rd_sgi_base + GICR_IPRIORITYR0 + i));
 	}
 	return 0;
+}
+
+static void irq_handler(void *arg)
+{
+	printf("%s:%d %d\n", __FUNCTION__, __LINE__, (u32)arg);
 }
 
 int module_gicv3_test(int case_id, unsigned long *arg_list, int argc)
@@ -150,7 +202,7 @@ int module_gicv3_test(int case_id, unsigned long *arg_list, int argc)
 		ret = gicv3_register_dump_test();
 		break;
 	case 1:
-		local_irq_disable();
+		irq_install_handler(66, irq_handler, (void *)66, 0);
 		break;
 	default:
 		printf("Unkonw case.\n");
